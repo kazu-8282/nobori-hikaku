@@ -116,7 +116,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 5</div>
+  <div style="color:#777;font-size:12px;text-align:center">版 6</div>
 </div>
 
 <form id="edit" hidden>
@@ -228,11 +228,7 @@ for (const el of document.querySelectorAll('.pane')) {
 
   p.playBtn.onclick = () => togglePlay(p);
   gestures(p);
-  p.v.onseeked = () => { // 指でなぞっている間にたまった移動先へ追いつく
-    const w = p.want;
-    p.want = null;
-    if (w != null && Math.abs(w - p.v.currentTime) > 0.02) seekTo(p, w);
-  };
+  p.v.onseeked = () => seekDone(p);
   $('.back', el).onclick = () => step(p, -1);
   $('.fwd', el).onclick = () => step(p, 1);
   $('.swap', el).onclick = $('.empty', el).onclick = () => openLib(p.side);
@@ -254,9 +250,23 @@ for (const el of document.querySelectorAll('.pane')) {
 
 const togglePlay = p => (p.v.paused ? play(p) : p.v.pause());
 const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
+// 指でなぞる間の位置移動。前の移動が終わってから次を送る。
+// iPhoneは「移動が終わった」の合図が来ないことがあるので、0.25秒待っても来なければ次へ進む。
 function seekTo(p, t) {
   p.want = t;
-  if (!p.v.seeking) p.v.currentTime = t;
+  if (!p.busy) seekFlush(p);
+}
+function seekFlush(p) {
+  p.busy = true;
+  p.v.currentTime = p.want;
+  p.want = null;
+  clearTimeout(p.seekTimer);
+  p.seekTimer = setTimeout(() => seekDone(p), 250);
+}
+function seekDone(p) {
+  clearTimeout(p.seekTimer);
+  p.busy = false;
+  if (p.want != null) seekFlush(p);
 }
 
 // 動画の上での指の操作
