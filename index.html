@@ -33,7 +33,8 @@ input{font:inherit;font-size:16px;color:#eee;background:#2a2a2e;border:1px solid
 .pane{min-width:0;min-height:0;display:flex;flex-direction:column;gap:4px;padding:4px}
 .ctl{display:flex;flex-direction:column;gap:4px}
 .vwrap{flex:1;min-height:0;position:relative;background:#000;border-radius:8px;overflow:hidden;touch-action:none;-webkit-touch-callout:none}
-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform-origin:0 0}
+video,.cv{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform-origin:0 0}
+.pane:not(.has) .cv{display:none}
 .label,.time{position:absolute;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.6);font-size:12px;pointer-events:none}
 .label{left:6px;top:6px;max-width:calc(100% - 12px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .time{right:6px;bottom:6px;font-variant-numeric:tabular-nums}
@@ -117,7 +118,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 17　<a href="test.html" style="color:#6cf">調査ページを開く</a></div>
+  <div style="color:#777;font-size:12px;text-align:center">版 18　<a href="test.html" style="color:#6cf">調査ページを開く</a></div>
 </div>
 
 <form id="edit" hidden>
@@ -136,6 +137,7 @@ body.tall .row button{flex:1 0 30%}
 <template id="paneTpl">
   <div class="vwrap">
     <video playsinline muted preload="auto"></video>
+    <canvas class="cv"></canvas>
     <div class="label"></div>
     <div class="time"></div>
     <div class="dbg"></div>
@@ -228,6 +230,13 @@ for (const el of document.querySelectorAll('.pane')) {
     label: $('.label', el), time: $('.time', el), playBtn: $('.play', el),
     rate: 1, id: null, url: null, dragging: false,
   };
+  // iPhoneは、止めた動画を触ると動画の表示面が真っ暗になる（裏では正しく動いている）。
+  // なので動画の表示面には頼らず、動画の絵を上に重ねた描画面（canvas）へ写して見せる。
+  p.cv = $('.cv', el);
+  p.ctx = p.cv.getContext('2d');
+  p.drawUntil = 0;
+  for (const name of ['loadeddata', 'playing', 'pause', 'seeking', 'seeked', 'timeupdate'])
+    p.v.addEventListener(name, () => { p.drawUntil = performance.now() + 800; });
   panes[p.side] = p;
   p.label.textContent = p.side;
 
@@ -252,6 +261,9 @@ for (const el of document.querySelectorAll('.pane')) {
 
   p.v.onloadedmetadata = () => {
     p.seek.max = p.v.duration;
+    const shrink = Math.min(1, 1920 / Math.max(p.v.videoWidth, p.v.videoHeight)); // 大きすぎる動画は描画面を小さくする
+    p.cv.width = Math.round(p.v.videoWidth * shrink);
+    p.cv.height = Math.round(p.v.videoHeight * shrink);
     const at = p.startAt;
     p.startAt = 0;
     prime(p, at);
@@ -318,7 +330,7 @@ function gestures(p) {
     const z = p.zoom, W = box.clientWidth, H = box.clientHeight;
     z.x = clamp(z.x, W - W * z.s, 0);
     z.y = clamp(z.y, H - H * z.s, 0);
-    p.v.style.transform = z.s === 1 ? '' : `translate(${z.x}px,${z.y}px) scale(${z.s})`;
+    p.v.style.transform = p.cv.style.transform = z.s === 1 ? '' : `translate(${z.x}px,${z.y}px) scale(${z.s})`;
   };
   const local = e => {
     const r = box.getBoundingClientRect();
@@ -421,10 +433,28 @@ function refreshButtons() {
   for (const p of Object.values(panes)) p.playBtn.textContent = p.v.paused ? '▶' : '⏸';
   $('#bothIco').textContent = anyPlaying() ? '⏸' : '▶';
 }
+// 調査用：動画から写した絵の明るさ（0＝真っ黒）。写した絵まで黒いのかどうかを見分ける
+const probe = document.createElement('canvas');
+probe.width = probe.height = 8;
+const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+function lumOf(v) {
+  try {
+    probeCtx.drawImage(v, 0, 0, 8, 8);
+    const d = probeCtx.getImageData(0, 0, 8, 8).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+    return Math.round(sum / (64 * 3));
+  } catch (e) { return 'x'; }
+}
 (function tick() {
   for (const p of loaded()) {
     if (p.scrub) chase(p);
-    p.dbg.textContent = `v17 rs${p.v.readyState} ${p.v.paused ? 'pause' : 'PLAY'}${p.v.seeking ? ' SEEKING' : ''} err${p.v.error ? p.v.error.code : '-'} t${p.v.currentTime.toFixed(2)}
+    // 再生中と、止めた・位置を動かした直後は、動画の絵を描画面へ写し続ける
+    if (p.v.readyState >= 2 && p.cv.width && (!p.v.paused || performance.now() < p.drawUntil)) {
+      p.ctx.drawImage(p.v, 0, 0, p.cv.width, p.cv.height);
+      if (!(p.draws = (p.draws || 0) + 1) || p.draws % 15 === 1) p.lum = lumOf(p.v);
+    }
+    p.dbg.textContent = `v18 rs${p.v.readyState} ${p.v.paused ? 'pause' : 'PLAY'}${p.v.seeking ? ' SEEKING' : ''} err${p.v.error ? p.v.error.code : '-'} t${p.v.currentTime.toFixed(2)} lum${p.lum ?? '-'}
 ${p.log.join(' ')}`;
     if (!p.dragging) p.seek.value = p.v.currentTime;
     p.time.textContent = clock(p.v.currentTime);
