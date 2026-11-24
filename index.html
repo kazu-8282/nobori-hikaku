@@ -32,8 +32,8 @@ input{font:inherit;font-size:16px;color:#eee;background:#2a2a2e;border:1px solid
 #mid{grid-area:m}
 .pane{min-width:0;min-height:0;display:flex;flex-direction:column;gap:4px;padding:4px}
 .ctl{display:flex;flex-direction:column;gap:4px}
-.vwrap{flex:1;min-height:0;position:relative;background:#000;border-radius:8px;overflow:hidden}
-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.vwrap{flex:1;min-height:0;position:relative;background:#000;border-radius:8px;overflow:hidden;touch-action:none}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform-origin:0 0}
 .label,.time{position:absolute;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.6);font-size:12px;pointer-events:none}
 .label{left:6px;top:6px;max-width:calc(100% - 12px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .time{right:6px;bottom:6px;font-variant-numeric:tabular-nums}
@@ -45,12 +45,14 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .row button{flex:1;padding:0;font-size:14px}
 .row .on{background:#e8590c;color:#fff}
 
-#mid{display:flex;padding:0 4px}
+#mid{display:flex;gap:4px;padding:0 4px}
+#setsBtn{flex:none;padding:0 16px}
 #both{flex:1;display:flex;gap:8px;align-items:center;justify-content:center;background:#e8590c;color:#fff;font-weight:600}
 #both:active{background:#b94608}
 @media (orientation:landscape){
   #stage{grid-template:"a m b" 1fr / 1fr 56px 1fr}
-  #mid{padding:4px 0}
+  #mid{flex-direction:column;padding:4px 0}
+  #setsBtn{padding:0;font-size:12px}
   #both{flex-direction:column;padding:0}
 }
 /* 縦長の動画のとき：2本を隣り合わせにして大きく映す */
@@ -59,23 +61,27 @@ body.tall .row{flex-wrap:wrap}
 body.tall .row button{flex:1 0 30%}
 @media (orientation:landscape){
   body.tall #stage{grid-template:"a b" 1fr / 1fr 1fr}
-  body.tall .pane{flex-direction:row}
-  body.tall .ctl{width:150px;justify-content:center}
+  body.tall{padding-bottom:0}
+  body.tall .pane{flex-direction:row;gap:2px;padding:0 2px}
+  body.tall .vwrap{border-radius:0}
+  body.tall .ctl{width:104px;justify-content:center}
+  body.tall .row button{min-height:36px;font-size:12px}
   body.tall .pane[data-side="A"] .ctl{order:-1}
-  body.tall #mid{position:absolute;z-index:2;left:50%;bottom:8px;transform:translateX(-50%);width:56px;height:56px;padding:0}
-  body.tall #both{border-radius:50%;gap:0;font-size:11px;opacity:.9}
+  body.tall #mid{position:absolute;z-index:2;left:50%;bottom:calc(env(safe-area-inset-bottom) + 4px);transform:translateX(-50%);width:56px;padding:0;flex-direction:column-reverse;align-items:center;gap:6px}
+  body.tall #both{flex:none;width:56px;height:56px;border-radius:50%;gap:0;font-size:11px;opacity:.9}
+  body.tall #setsBtn{width:44px;height:44px;min-height:0;border-radius:50%;font-size:10px;opacity:.9}
 }
 
-#lib{position:fixed;inset:0;z-index:10;background:#111;overflow:auto;display:flex;flex-direction:column;gap:8px;
+#lib,#sets{position:fixed;inset:0;z-index:10;background:#111;overflow:auto;display:flex;flex-direction:column;gap:8px;
   padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px)}
-#lib header{display:flex;align-items:center;gap:8px}
-#lib header b{flex:1;font-size:17px}
-#add{background:#e8590c;color:#fff;font-weight:600}
-#list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-#list li{display:flex;gap:4px}
-#list .pick{flex:1;min-width:0;text-align:left;padding:8px 12px;line-height:1.4}
-#list .pick small{display:block;color:#aaa}
-#list .del{color:#ff8a80}
+#lib header,#sets header{display:flex;align-items:center;gap:8px}
+#lib header b,#sets header b{flex:1;font-size:17px}
+#add,#setSave{background:#e8590c;color:#fff;font-weight:600}
+#list,#setList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#list li,#setList li{display:flex;gap:4px}
+.pick{flex:1;min-width:0;text-align:left;padding:8px 12px;line-height:1.4}
+.pick small{display:block;color:#aaa}
+.del{color:#ff8a80}
 #usage{color:#aaa;font-size:13px;text-align:center;padding:8px}
 
 #edit{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -95,7 +101,7 @@ body.tall .row button{flex:1 0 30%}
 
 <main id="stage">
   <section class="pane" data-side="A"></section>
-  <div id="mid"><button id="both"><span id="bothIco">▶</span><span>両方</span></button></div>
+  <div id="mid"><button id="both"><span id="bothIco">▶</span><span>両方</span></button><button id="setsBtn">セット</button></div>
   <section class="pane" data-side="B"></section>
 </main>
 
@@ -104,6 +110,12 @@ body.tall .row button{flex:1 0 30%}
   <button id="add">＋ カメラロールから追加</button>
   <ul id="list"></ul>
   <div id="usage"></div>
+</div>
+
+<div id="sets" hidden>
+  <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
+  <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
+  <ul id="setList"></ul>
 </div>
 
 <form id="edit" hidden>
@@ -149,12 +161,13 @@ const FRAME = 1 / 30; // コマ送りの1コマ（秒）
 let dbPromise;
 function db() {
   return dbPromise ??= new Promise((res, rej) => {
-    const r = indexedDB.open('climb-compare', 1);
+    const r = indexedDB.open('climb-compare', 2);
     r.onupgradeneeded = () => {
-      r.result.createObjectStore('meta', { keyPath: 'id' });
-      r.result.createObjectStore('blobs');
+      const d = r.result;
+      for (const [name, opt] of [['meta', { keyPath: 'id' }], ['blobs'], ['sets', { keyPath: 'id' }]])
+        if (!d.objectStoreNames.contains(name)) d.createObjectStore(name, opt);
     };
-    r.onsuccess = () => res(r.result);
+    r.onsuccess = () => { r.result.onversionchange = () => r.result.close(); res(r.result); };
     r.onerror = () => rej(r.error);
   });
 }
@@ -180,6 +193,11 @@ const delVideo = id => tx(['meta', 'blobs'], 'readwrite', t => {
   t.objectStore('meta').delete(id);
   t.objectStore('blobs').delete(id);
 });
+
+const listSets = () => tx(['sets'], 'readonly', t => t.objectStore('sets').getAll());
+const putSet = set => tx(['sets'], 'readwrite', t => { t.objectStore('sets').put(set); });
+const delSet = id => tx(['sets'], 'readwrite', t => { t.objectStore('sets').delete(id); });
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
 function remember(key, value) { try { localStorage.setItem(key, value); } catch {} }
 function recall(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -207,7 +225,13 @@ for (const el of document.querySelectorAll('.pane')) {
   panes[p.side] = p;
   p.label.textContent = p.side;
 
-  p.playBtn.onclick = p.v.onclick = () => (p.v.paused ? play(p) : p.v.pause());
+  p.playBtn.onclick = () => togglePlay(p);
+  gestures(p);
+  p.v.onseeked = () => { // 指でなぞっている間にたまった移動先へ追いつく
+    const w = p.want;
+    p.want = null;
+    if (w != null && Math.abs(w - p.v.currentTime) > 0.02) seekTo(p, w);
+  };
   $('.back', el).onclick = () => step(p, -1);
   $('.fwd', el).onclick = () => step(p, 1);
   $('.swap', el).onclick = $('.empty', el).onclick = () => openLib(p.side);
@@ -219,12 +243,82 @@ for (const el of document.querySelectorAll('.pane')) {
 
   p.v.onloadedmetadata = () => {
     p.seek.max = p.v.duration;
-    p.v.currentTime = 0.001; // iPhoneで最初の1コマを表示させる
+    p.v.currentTime = p.startAt || 0.001; // 0.001はiPhoneで最初の1コマを表示させるため
+    p.startAt = 0;
     refreshLayout();
   };
   p.v.onplay = p.v.onpause = refreshButtons;
   p.v.onerror = () => { if (p.id) p.label.textContent = `${p.side} この動画は再生できません`; };
 }
+
+const togglePlay = p => (p.v.paused ? play(p) : p.v.pause());
+const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
+function seekTo(p, t) {
+  p.want = t;
+  if (!p.v.seeking) p.v.currentTime = t;
+}
+
+// 動画の上での指の操作
+//  1本指で左右になぞる：その分だけ動画を進める・戻す（指の速さでスロー再生）
+//  2本指でつまむ・広げる：その画面だけ拡大。2本指のまま動かすと見る場所を移せる
+//  タップ：再生・停止　／　2回タップ：拡大を元に戻す
+const SCRUB = 0.01; // 指1ピクセルで進む秒数
+const MAX_ZOOM = 6;
+function gestures(p) {
+  const box = $('.vwrap', p.el);
+  const pts = new Map();
+  let g = null, lastTap = 0;
+  p.zoom = { s: 1, x: 0, y: 0 };
+  p.applyZoom = () => {
+    const z = p.zoom, W = box.clientWidth, H = box.clientHeight;
+    z.x = clamp(z.x, W - W * z.s, 0);
+    z.y = clamp(z.y, H - H * z.s, 0);
+    p.v.style.transform = z.s === 1 ? '' : `translate(${z.x}px,${z.y}px) scale(${z.s})`;
+  };
+  const local = e => {
+    const r = box.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const pinchNow = () => {
+    const [a, b] = [...pts.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  };
+  box.onpointerdown = e => {
+    if (e.target.closest('button')) return;
+    try { box.setPointerCapture(e.pointerId); } catch {}
+    pts.set(e.pointerId, local(e));
+    if (pts.size === 1) g = { one: true, x0: e.clientX, t0: p.v.currentTime, moved: false, at: performance.now() };
+    else if (pts.size === 2) g = { ...pinchNow(), s0: p.zoom.s, zx: p.zoom.x, zy: p.zoom.y };
+  };
+  box.onpointermove = e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, local(e));
+    if (!g) return;
+    if (g.one) {
+      const dx = e.clientX - g.x0;
+      if (!p.id || (!g.moved && Math.abs(dx) < 8)) return;
+      if (!g.moved) { g.moved = true; p.v.pause(); }
+      seekTo(p, clamp(g.t0 + dx * SCRUB, 0, p.v.duration || 0));
+    } else if (pts.size >= 2) {
+      const now = pinchNow();
+      const s = clamp(g.s0 * now.d / g.d, 1, MAX_ZOOM);
+      // つまみ始めに指の真ん中にあった場所が、いまの指の真ん中に来るようにする
+      p.zoom = { s, x: now.mx - (g.mx - g.zx) * (s / g.s0), y: now.my - (g.my - g.zy) * (s / g.s0) };
+      p.applyZoom();
+    }
+  };
+  box.onpointerup = box.onpointercancel = e => {
+    if (!pts.delete(e.pointerId)) return;
+    const now = performance.now();
+    if (g?.one && !g.moved && e.type === 'pointerup' && now - g.at < 300) {
+      if (now - lastTap < 350) { p.zoom = { s: 1, x: 0, y: 0 }; p.applyZoom(); }
+      lastTap = now;
+      togglePlay(p);
+    }
+    g = null; // 指が残っていても、全部離すまでは何もしない
+  };
+}
+addEventListener('resize', () => Object.values(panes).forEach(p => p.applyZoom()));
 
 function play(p) {
   if (!p.id) return;
@@ -242,17 +336,20 @@ function setRate(p, r) {
   p.v.defaultPlaybackRate = p.v.playbackRate = r;
   for (const b of p.el.querySelectorAll('.rate')) b.classList.toggle('on', +b.dataset.r === r);
 }
-async function loadSlot(p, id) {
+async function loadSlot(p, id, startAt = 0) {
   p.v.pause();
   if (p.url) { URL.revokeObjectURL(p.url); p.url = null; }
   p.v.removeAttribute('src');
   p.v.load();
   p.id = null;
+  p.zoom = { s: 1, x: 0, y: 0 };
+  p.applyZoom();
   const meta = id && (await listMeta()).find(m => m.id === id);
   const blob = meta && await getBlob(id);
   if (blob) {
     p.id = id;
     p.url = URL.createObjectURL(blob);
+    p.startAt = startAt;
     p.v.src = p.url;
     p.v.defaultPlaybackRate = p.rate;
   }
@@ -358,7 +455,7 @@ $('#edit').onsubmit = async e => {
   try {
     if (editing.file) {
       const meta = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+        id: newId(),
         date, memo, size: editing.file.size, addedAt: Date.now(),
       };
       await addVideo(meta, editing.file);
@@ -379,6 +476,54 @@ $('#edit').onsubmit = async e => {
     $('#eSave').textContent = '保存';
   }
 };
+
+// ---------- セット（A と B の組み合わせを名前を付けて保存） ----------
+$('#setsBtn').onclick = async () => { await renderSets(); $('#sets').hidden = false; };
+$('#setsClose').onclick = () => { $('#sets').hidden = true; };
+$('#setSave').onclick = async () => {
+  const { A, B } = panes;
+  if (!A.id || !B.id) { alert('A と B の両方に動画を出してから保存してください。'); return; }
+  const name = prompt('このセットの名前（例：3級 赤 落ちた日と登れた日）')?.trim();
+  if (!name) return;
+  // 動画の組み合わせと、いま止めている位置を覚える
+  await putSet({ id: newId(), name, a: A.id, b: B.id, ta: A.v.currentTime, tb: B.v.currentTime, addedAt: Date.now() });
+  renderSets();
+};
+async function renderSets() {
+  const [sets, metas] = await Promise.all([listSets(), listMeta()]);
+  const title = id => { const m = metas.find(m => m.id === id); return m ? titleOf(m) : '（削除された動画）'; };
+  const list = $('#setList');
+  list.replaceChildren();
+  for (const s of sets.sort((x, y) => y.addedAt - x.addedAt)) {
+    const li = document.createElement('li');
+    const pick = document.createElement('button');
+    pick.className = 'pick';
+    const a = document.createElement('small'), b = document.createElement('small');
+    a.textContent = `A：${title(s.a)}`;
+    b.textContent = `B：${title(s.b)}`;
+    pick.append(s.name, a, b);
+    pick.onclick = async () => {
+      await Promise.all([loadSlot(panes.A, s.a, s.ta), loadSlot(panes.B, s.b, s.tb)]);
+      $('#sets').hidden = true;
+    };
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '削除';
+    del.onclick = async () => {
+      if (!confirm(`セット「${s.name}」を削除します。\n（動画そのものは消えません）`)) return;
+      await delSet(s.id);
+      renderSets();
+    };
+    li.append(pick, del);
+    list.append(li);
+  }
+  if (!sets.length) {
+    const li = document.createElement('li');
+    li.style.cssText = 'color:#aaa;font-size:13px;justify-content:center;padding:8px';
+    li.textContent = 'まだセットがありません。';
+    list.append(li);
+  }
+}
 
 // ---------- 起動 ----------
 const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
