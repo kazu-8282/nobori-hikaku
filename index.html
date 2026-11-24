@@ -37,7 +37,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transf
 .label,.time{position:absolute;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.6);font-size:12px;pointer-events:none}
 .label{left:6px;top:6px;max-width:calc(100% - 12px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .time{right:6px;bottom:6px;font-variant-numeric:tabular-nums}
-.dbg{position:absolute;left:4px;right:64px;bottom:4px;font:10px/1.3 monospace;color:#3f3;background:rgba(0,0,0,.7);pointer-events:none;white-space:pre-wrap;word-break:break-all}
 .empty{position:absolute;inset:0;margin:auto;width:max-content;height:48px;background:#e8590c;color:#fff;font-weight:600}
 .pane.has .empty{display:none}
 .pane:not(.has) .time{display:none}
@@ -117,7 +116,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 14　<a href="test.html" style="color:#6cf">調査ページを開く</a></div>
+  <div style="color:#777;font-size:12px;text-align:center">版 15</div>
 </div>
 
 <form id="edit" hidden>
@@ -138,7 +137,6 @@ body.tall .row button{flex:1 0 30%}
     <video playsinline muted preload="auto"></video>
     <div class="label"></div>
     <div class="time"></div>
-    <div class="dbg"></div>
     <button class="empty">＋ 動画を選ぶ</button>
   </div>
   <div class="ctl">
@@ -230,12 +228,6 @@ for (const el of document.querySelectorAll('.pane')) {
   };
   panes[p.side] = p;
   p.label.textContent = p.side;
-
-  // ---- 調査用（原因が分かったら消す）：動画の状態と、直近の出来事を画面に出す
-  p.dbg = $('.dbg', el);
-  p.log = [];
-  for (const name of ['loadstart', 'loadedmetadata', 'canplay', 'waiting', 'stalled', 'suspend', 'emptied', 'abort', 'error', 'seeking', 'seeked', 'play', 'pause', 'ended'])
-    p.v.addEventListener(name, () => { p.log.push(name); if (p.log.length > 10) p.log.shift(); });
 
   p.playBtn.onclick = () => togglePlay(p);
   gestures(p);
@@ -384,7 +376,6 @@ async function loadSlot(p, id, startAt = 0) {
     p.id = id;
     p.url = URL.createObjectURL(blob);
     p.startAt = startAt;
-    p.info = `${(blob.size / 1048576).toFixed(0)}MB ${blob.type || 'notype'}`;
     p.v.src = p.url;
     p.v.defaultPlaybackRate = p.rate;
   }
@@ -413,14 +404,6 @@ function refreshButtons() {
 (function tick() {
   for (const p of loaded()) {
     if (p.scrub) chase(p);
-    const v = p.v, buf = [];
-    for (let i = 0; i < v.buffered.length; i++) buf.push(`${v.buffered.start(i).toFixed(1)}-${v.buffered.end(i).toFixed(1)}`);
-    p.dbg.textContent = `v14 rs${v.readyState} ns${v.networkState} ${v.paused ? 'pause' : 'PLAY'}${v.seeking ? ' SEEKING' : ''} err${v.error ? v.error.code : '-'}`
-      + `
-t${v.currentTime.toFixed(2)}/${(v.duration || 0).toFixed(1)} x${v.playbackRate} ${v.videoWidth}x${v.videoHeight} ${p.info || ''}`
-      + `
-buf ${buf.join(',') || 'none'}
-${p.log.join(' ')}`;
     if (!p.dragging) p.seek.value = p.v.currentTime;
     p.time.textContent = clock(p.v.currentTime);
   }
