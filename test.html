@@ -20,7 +20,7 @@ a,button{color:#fff;background:#e8590c;border:0;border-radius:8px;padding:10px 1
 <body>
 <a href="./">← アプリに戻る</a>
 <button id="again">もう一度</button>
-<p id="msg">調査中… 20秒ほど待ってください。</p>
+<p id="msg">調査中… 30秒ほど待ってください。</p>
 <div id="grid"></div>
 <script>
 'use strict';
@@ -77,7 +77,7 @@ async function seek(v, t) {
 async function run() {
   document.getElementById('grid').replaceChildren();
   const msg = document.getElementById('msg');
-  msg.textContent = '調査中… 20秒ほど待ってください。';
+  msg.textContent = '調査中… 30秒ほど待ってください。';
   const blob = await firstBlob();
   if (!blob) { msg.textContent = 'アプリに保存された動画がありません。先にアプリで動画を1本入れてください。'; return; }
 
@@ -109,6 +109,26 @@ async function run() {
 
   t = tile(8, '飾りなしで4', true);
   v = video(t, blob); await once(v, 'loadedmetadata'); await playFor(v, 500); t.extra = await seek(v, 2); await wait(500);
+
+  t = tile(9, '3コマだけ再生→止める→2秒へ');
+  v = video(t, blob); await once(v, 'loadedmetadata');
+  try {
+    await v.play();
+    if (v.requestVideoFrameCallback) await new Promise(r => { let n = 0; const f = () => (++n >= 3 ? r() : v.requestVideoFrameCallback(f)); v.requestVideoFrameCallback(f); setTimeout(r, 1500); });
+    v.pause();
+  } catch (e) {}
+  t.extra = await seek(v, 2); await wait(500);
+
+  t = tile(10, '再生→止める→0.05秒へ');
+  v = video(t, blob); await once(v, 'loadedmetadata'); await playFor(v, 500); t.extra = await seek(v, 0.05); await wait(500);
+
+  t = tile(11, '再生→止める→0.3秒へ');
+  v = video(t, blob); await once(v, 'loadedmetadata'); await playFor(v, 500); t.extra = await seek(v, 0.3); await wait(500);
+
+  t = tile(12, '再生→止める→続けて20回移動');
+  v = video(t, blob); await once(v, 'loadedmetadata'); await playFor(v, 500);
+  { let ok = 0; const t0 = performance.now(); for (let i = 0; i < 20; i++) if (await seek(v, 2 + i * 0.05) === 'ok') ok++; t.extra = `${ok}/20回 ${Math.round(performance.now() - t0)}ms`; }
+  await wait(500);
 
   msg.textContent = `終わりました。この画面のスクリーンショットを送ってください。（動画 ${(blob.size / 1048576).toFixed(0)}MB ${blob.type}）`;
 }

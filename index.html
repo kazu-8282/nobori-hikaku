@@ -117,7 +117,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 13　<a href="test.html" style="color:#6cf">調査ページを開く</a></div>
+  <div style="color:#777;font-size:12px;text-align:center">版 14　<a href="test.html" style="color:#6cf">調査ページを開く</a></div>
 </div>
 
 <form id="edit" hidden>
@@ -159,9 +159,9 @@ body.tall .row button{flex:1 0 30%}
 'use strict';
 const $ = (s, el = document) => el.querySelector(s);
 const FRAME = 1 / 30; // コマ送りの1コマ（秒）
-// 位置を動かすときの下限（秒）。iPhoneでは、0秒ちょうどや0.001秒へ動かすと
-// 移動が終わらないまま固まり、画面が真っ暗になった（実機の状態表示で確認）。
-const MIN_T = 0.05;
+// 位置を動かすときの下限（秒）。iPhoneでは、0秒ちょうどや0.001秒へ動かすと移動が終わらないまま固まった。
+// どこまで先頭に寄せてよいかは調査中なので、いまは余裕を見ている。
+const MIN_T = 0.3;
 
 // ---------- 保存（IndexedDB：meta=一覧用の情報、blobs=動画本体） ----------
 let dbPromise;
@@ -251,7 +251,7 @@ for (const el of document.querySelectorAll('.pane')) {
 
   p.v.onloadedmetadata = () => {
     p.seek.max = p.v.duration;
-    const at = Math.max(p.startAt, MIN_T);
+    const at = p.startAt;
     p.startAt = 0;
     prime(p, at);
     refreshLayout();
@@ -265,26 +265,16 @@ const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
 // 動画のいちばん最後ぴったりに合わせるとiPhoneでは真っ暗になるので、少し手前までにする
 const lastFrame = p => Math.max((p.v.duration || 0) - 0.05, 0);
 // 読み込んだ動画を、止めたまま位置を動かせる状態にする。
-// iPhoneは、実際に絵が何コマか出るまで再生しないと、止めたあとの画面が真っ暗になる
-// （再生してすぐ止めただけでは真っ暗のままだった）。なので絵が3コマ出るのを待ってから止め、
-// そのあとで見せたい位置へ動かす。
+// iPhoneの調査ページで確かめた手順：0.5秒再生して止める → そのあとなら位置を動かしても絵が出る。
+// （読み込むだけ、または再生せずに位置を動かすと、真っ暗になる・固まる）
 function prime(p, at) {
   const v = p.v, url = p.url;
-  let done = false;
-  const finish = () => {
-    if (done || p.url !== url) return;
-    done = true;
+  const settle = () => {
+    if (p.url !== url) return; // 待っている間に別の動画へ替えられた
     v.pause();
-    v.currentTime = at;
+    if (at > MIN_T) v.currentTime = at;
   };
-  v.play().then(() => {
-    if (v.requestVideoFrameCallback) {
-      let frames = 0;
-      const onFrame = () => { if (++frames >= 3) finish(); else if (!done) v.requestVideoFrameCallback(onFrame); };
-      v.requestVideoFrameCallback(onFrame);
-      setTimeout(finish, 1500);
-    } else setTimeout(finish, 400);
-  }, finish);
+  v.play().then(() => setTimeout(settle, 500), settle);
 }
 
 // 指でなぞっている間、動画の位置を指の位置（p.scrub.target）へ動かす。毎コマ呼ばれる。
@@ -425,7 +415,7 @@ function refreshButtons() {
     if (p.scrub) chase(p);
     const v = p.v, buf = [];
     for (let i = 0; i < v.buffered.length; i++) buf.push(`${v.buffered.start(i).toFixed(1)}-${v.buffered.end(i).toFixed(1)}`);
-    p.dbg.textContent = `v12 rs${v.readyState} ns${v.networkState} ${v.paused ? 'pause' : 'PLAY'}${v.seeking ? ' SEEKING' : ''} err${v.error ? v.error.code : '-'}`
+    p.dbg.textContent = `v14 rs${v.readyState} ns${v.networkState} ${v.paused ? 'pause' : 'PLAY'}${v.seeking ? ' SEEKING' : ''} err${v.error ? v.error.code : '-'}`
       + `
 t${v.currentTime.toFixed(2)}/${(v.duration || 0).toFixed(1)} x${v.playbackRate} ${v.videoWidth}x${v.videoHeight} ${p.info || ''}`
       + `
