@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="登り比較">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>登り比較</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:#111;color:#eee;font:15px -apple-system,system-ui,sans-serif;
+  overscroll-behavior:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+body{display:flex;flex-direction:column;height:100vh;height:100dvh;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+[hidden]{display:none!important}
+button{font:inherit;color:#eee;background:#2a2a2e;border:0;border-radius:8px;padding:0 12px;min-height:44px}
+button:active{background:#444}
+input{font:inherit;font-size:16px;color:#eee;background:#2a2a2e;border:1px solid #444;border-radius:8px;
+  padding:10px;width:100%;-webkit-user-select:text;user-select:text}
+
+#hint{display:flex;gap:8px;align-items:center;padding:8px;background:#5c2b00;font-size:13px;line-height:1.5}
+#hint span{flex:1}
+
+#stage{flex:1;min-height:0;display:flex;flex-direction:column}
+.pane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:4px;padding:4px}
+.vwrap{flex:1;min-height:0;position:relative;background:#000;border-radius:8px;overflow:hidden}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.label,.time{position:absolute;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.6);font-size:12px;pointer-events:none}
+.label{left:6px;top:6px;max-width:calc(100% - 12px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.time{right:6px;bottom:6px;font-variant-numeric:tabular-nums}
+.empty{position:absolute;inset:0;margin:auto;width:max-content;height:48px;background:#e8590c;color:#fff;font-weight:600}
+.pane.has .empty{display:none}
+.pane:not(.has) .time{display:none}
+.seek{width:100%;height:28px;margin:0;accent-color:#e8590c}
+.row{display:flex;gap:4px}
+.row button{flex:1;padding:0;font-size:14px}
+.row .on{background:#e8590c;color:#fff}
+
+#mid{display:flex;padding:0 4px}
+#both{flex:1;display:flex;gap:8px;align-items:center;justify-content:center;background:#e8590c;color:#fff;font-weight:600}
+#both:active{background:#b94608}
+@media (orientation:landscape){
+  #stage{flex-direction:row}
+  #mid{width:56px;padding:4px 0}
+  #both{flex-direction:column;padding:0}
+}
+
+#lib{position:fixed;inset:0;z-index:10;background:#111;overflow:auto;display:flex;flex-direction:column;gap:8px;
+  padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px)}
+#lib header{display:flex;align-items:center;gap:8px}
+#lib header b{flex:1;font-size:17px}
+#add{background:#e8590c;color:#fff;font-weight:600}
+#list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#list li{display:flex;gap:4px}
+#list .pick{flex:1;min-width:0;text-align:left;padding:8px 12px;line-height:1.4}
+#list .pick small{display:block;color:#aaa}
+#list .del{color:#ff8a80}
+#usage{color:#aaa;font-size:13px;text-align:center;padding:8px}
+
+#edit{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px}
+#edit .card{background:#1c1c1f;border-radius:12px;padding:16px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px}
+#edit label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#aaa}
+#edit .btns{display:flex;gap:8px}
+#edit .btns button{flex:1}
+#eSave{background:#e8590c;color:#fff;font-weight:600}
+</style>
+</head>
+<body>
+
+<div id="hint" hidden>
+  <span>保存した動画が消えないように、下の共有ボタンから「ホーム画面に追加」して、そのアイコンから開いてください。</span>
+  <button id="hintClose">閉じる</button>
+</div>
+
+<main id="stage">
+  <section class="pane" data-side="A"></section>
+  <div id="mid"><button id="both"><span id="bothIco">▶</span><span>両方</span></button></div>
+  <section class="pane" data-side="B"></section>
+</main>
+
+<div id="lib" hidden>
+  <header><b id="libTitle"></b><button id="libClose">閉じる</button></header>
+  <button id="add">＋ カメラロールから追加</button>
+  <ul id="list"></ul>
+  <div id="usage"></div>
+</div>
+
+<form id="edit" hidden>
+  <div class="card">
+    <label>撮った日<input type="date" id="eDate" required></label>
+    <label>メモ（課題名など）<input type="text" id="eMemo" maxlength="40" placeholder="例：3級 赤"></label>
+    <div class="btns">
+      <button type="button" id="eCancel">やめる</button>
+      <button type="submit" id="eSave">保存</button>
+    </div>
+  </div>
+</form>
+
+<input type="file" id="file" accept="video/*" hidden>
+
+<template id="paneTpl">
+  <div class="vwrap">
+    <video playsinline muted preload="auto"></video>
+    <div class="label"></div>
+    <div class="time"></div>
+    <button class="empty">＋ 動画を選ぶ</button>
+  </div>
+  <input type="range" class="seek" min="0" max="0" step="0.01" value="0" aria-label="再生位置">
+  <div class="row">
+    <button class="back" aria-label="1コマ戻す">◀|</button>
+    <button class="play" aria-label="再生・停止">▶</button>
+    <button class="fwd" aria-label="1コマ進める">|▶</button>
+    <button class="rate" data-r="0.25">0.25x</button>
+    <button class="rate" data-r="0.5">0.5x</button>
+    <button class="rate on" data-r="1">1x</button>
+    <button class="swap">替える</button>
+  </div>
+</template>
+
+<script>
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const FRAME = 1 / 30; // コマ送りの1コマ（秒）
+
+// ---------- 保存（IndexedDB：meta=一覧用の情報、blobs=動画本体） ----------
+let dbPromise;
+function db() {
+  return dbPromise ??= new Promise((res, rej) => {
+    const r = indexedDB.open('climb-compare', 1);
+    r.onupgradeneeded = () => {
+      r.result.createObjectStore('meta', { keyPath: 'id' });
+      r.result.createObjectStore('blobs');
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function tx(stores, mode, fn) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const t = d.transaction(stores, mode);
+    let out;
+    t.oncomplete = () => res(out);
+    t.onerror = t.onabort = () => rej(t.error);
+    const r = fn(t);
+    if (r) r.onsuccess = () => { out = r.result; };
+  });
+}
+const listMeta = () => tx(['meta'], 'readonly', t => t.objectStore('meta').getAll());
+const getBlob = id => tx(['blobs'], 'readonly', t => t.objectStore('blobs').get(id));
+const putMeta = meta => tx(['meta'], 'readwrite', t => { t.objectStore('meta').put(meta); });
+const addVideo = (meta, blob) => tx(['meta', 'blobs'], 'readwrite', t => {
+  t.objectStore('meta').put(meta);
+  t.objectStore('blobs').put(blob, meta.id);
+});
+const delVideo = id => tx(['meta', 'blobs'], 'readwrite', t => {
+  t.objectStore('meta').delete(id);
+  t.objectStore('blobs').delete(id);
+});
+
+function remember(key, value) { try { localStorage.setItem(key, value); } catch {} }
+function recall(key) { try { return localStorage.getItem(key); } catch { return null; } }
+
+// ---------- 表示用 ----------
+const titleOf = m => `${m.date.replaceAll('-', '/')} ${m.memo}`.trim();
+function localDate(ms) {
+  const d = new Date(ms), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function clock(s) {
+  s = Math.max(0, s || 0);
+  return `${Math.floor(s / 60)}:${(s % 60).toFixed(2).padStart(5, '0')}`;
+}
+
+// ---------- 左右（上下）の動画 ----------
+const panes = {};
+for (const el of document.querySelectorAll('.pane')) {
+  el.append($('#paneTpl').content.cloneNode(true));
+  const p = {
+    el, side: el.dataset.side, v: $('video', el), seek: $('.seek', el),
+    label: $('.label', el), time: $('.time', el), playBtn: $('.play', el),
+    rate: 1, id: null, url: null, dragging: false,
+  };
+  panes[p.side] = p;
+  p.label.textContent = p.side;
+
+  p.playBtn.onclick = p.v.onclick = () => (p.v.paused ? play(p) : p.v.pause());
+  $('.back', el).onclick = () => step(p, -1);
+  $('.fwd', el).onclick = () => step(p, 1);
+  $('.swap', el).onclick = $('.empty', el).onclick = () => openLib(p.side);
+  for (const b of el.querySelectorAll('.rate')) b.onclick = () => setRate(p, +b.dataset.r);
+
+  p.seek.oninput = () => { p.v.currentTime = +p.seek.value; };
+  p.seek.onpointerdown = () => { p.dragging = true; };
+  p.seek.onpointerup = p.seek.onpointercancel = () => { p.dragging = false; };
+
+  p.v.onloadedmetadata = () => {
+    p.seek.max = p.v.duration;
+    p.v.currentTime = 0.001; // iPhoneで最初の1コマを表示させる
+  };
+  p.v.onplay = p.v.onpause = refreshButtons;
+  p.v.onerror = () => { if (p.id) p.label.textContent = `${p.side} この動画は再生できません`; };
+}
+
+function play(p) {
+  if (!p.id) return;
+  if (p.v.duration - p.v.currentTime < 0.05) p.v.currentTime = 0;
+  p.v.playbackRate = p.rate;
+  p.v.play().catch(() => {});
+}
+function step(p, dir) {
+  if (!p.id) return;
+  p.v.pause();
+  p.v.currentTime = Math.min(Math.max(p.v.currentTime + dir * FRAME, 0), p.v.duration || 0);
+}
+function setRate(p, r) {
+  p.rate = r;
+  p.v.defaultPlaybackRate = p.v.playbackRate = r;
+  for (const b of p.el.querySelectorAll('.rate')) b.classList.toggle('on', +b.dataset.r === r);
+}
+async function loadSlot(p, id) {
+  p.v.pause();
+  if (p.url) { URL.revokeObjectURL(p.url); p.url = null; }
+  p.v.removeAttribute('src');
+  p.v.load();
+  p.id = null;
+  const meta = id && (await listMeta()).find(m => m.id === id);
+  const blob = meta && await getBlob(id);
+  if (blob) {
+    p.id = id;
+    p.url = URL.createObjectURL(blob);
+    p.v.src = p.url;
+    p.v.defaultPlaybackRate = p.rate;
+  }
+  p.label.textContent = blob ? `${p.side} ${titleOf(meta)}` : p.side;
+  p.el.classList.toggle('has', !!p.id);
+  remember('slot-' + p.side, p.id || '');
+  refreshButtons();
+}
+
+const loaded = () => Object.values(panes).filter(p => p.id);
+const anyPlaying = () => loaded().some(p => !p.v.paused);
+$('#both').onclick = () => {
+  if (anyPlaying()) loaded().forEach(p => p.v.pause());
+  else loaded().forEach(play);
+};
+function refreshButtons() {
+  for (const p of Object.values(panes)) p.playBtn.textContent = p.v.paused ? '▶' : '⏸';
+  $('#bothIco').textContent = anyPlaying() ? '⏸' : '▶';
+}
+(function tick() {
+  for (const p of loaded()) {
+    if (!p.dragging) p.seek.value = p.v.currentTime;
+    p.time.textContent = clock(p.v.currentTime);
+  }
+  requestAnimationFrame(tick);
+})();
+
+// ---------- 保存した動画の一覧 ----------
+let libSide = 'A';
+let editing = null; // { file } 新しく追加 / { meta } メモの直し
+
+async function openLib(side) {
+  libSide = side;
+  $('#libTitle').textContent = `${side} に出す動画を選ぶ`;
+  await renderList();
+  $('#lib').hidden = false;
+}
+$('#libClose').onclick = () => { $('#lib').hidden = true; };
+
+async function renderList() {
+  const metas = (await listMeta()).sort((a, b) => b.date.localeCompare(a.date) || b.addedAt - a.addedAt);
+  const list = $('#list');
+  list.replaceChildren();
+  for (const m of metas) {
+    const li = document.createElement('li');
+    const pick = document.createElement('button');
+    pick.className = 'pick';
+    const inUse = Object.values(panes).filter(p => p.id === m.id).map(p => p.side).join('・');
+    const small = document.createElement('small');
+    small.textContent = `${(m.size / 1048576).toFixed(0)} MB${inUse ? `　いま ${inUse} に表示中` : ''}`;
+    pick.append(titleOf(m), small);
+    pick.onclick = async () => { await loadSlot(panes[libSide], m.id); $('#lib').hidden = true; };
+
+    const edit = document.createElement('button');
+    edit.textContent = 'メモ';
+    edit.onclick = () => openEdit({ meta: m });
+
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '削除';
+    del.onclick = async () => {
+      if (!confirm(`「${titleOf(m)}」をアプリから削除します。元に戻せません。\n（カメラロールの動画は消えません）`)) return;
+      await delVideo(m.id);
+      for (const p of Object.values(panes)) if (p.id === m.id) await loadSlot(p, null);
+      renderList();
+    };
+    li.append(pick, edit, del);
+    list.append(li);
+  }
+  const total = metas.reduce((s, m) => s + m.size, 0);
+  $('#usage').textContent = metas.length
+    ? `${metas.length}本を保存中（合計 約${(total / 1048576).toFixed(0)} MB）`
+    : 'まだ動画がありません。上のボタンから追加してください。';
+}
+
+$('#add').onclick = () => $('#file').click();
+$('#file').onchange = e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) openEdit({ file });
+};
+
+function openEdit(target) {
+  editing = target;
+  $('#eDate').value = target.meta ? target.meta.date : localDate(target.file.lastModified || Date.now());
+  $('#eMemo').value = target.meta ? target.meta.memo : '';
+  $('#eSave').textContent = '保存';
+  $('#eSave').disabled = false;
+  $('#edit').hidden = false;
+}
+$('#eCancel').onclick = () => { editing = null; $('#edit').hidden = true; };
+$('#edit').onsubmit = async e => {
+  e.preventDefault();
+  const date = $('#eDate').value, memo = $('#eMemo').value.trim();
+  $('#eSave').disabled = true;
+  $('#eSave').textContent = '保存中…';
+  try {
+    if (editing.file) {
+      const meta = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+        date, memo, size: editing.file.size, addedAt: Date.now(),
+      };
+      await addVideo(meta, editing.file);
+      await loadSlot(panes[libSide], meta.id);
+      $('#lib').hidden = true;
+    } else {
+      const meta = { ...editing.meta, date, memo };
+      await putMeta(meta);
+      for (const p of Object.values(panes)) if (p.id === meta.id) p.label.textContent = `${p.side} ${titleOf(meta)}`;
+      await renderList();
+    }
+    editing = null;
+    $('#edit').hidden = true;
+  } catch (err) {
+    console.error(err);
+    alert('保存できませんでした。iPhoneの空き容量が足りないかもしれません。');
+    $('#eSave').disabled = false;
+    $('#eSave').textContent = '保存';
+  }
+};
+
+// ---------- 起動 ----------
+const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+if (!standalone && /iPhone|iPad|iPod/.test(navigator.userAgent)) $('#hint').hidden = false;
+$('#hintClose').onclick = () => { $('#hint').hidden = true; };
+navigator.storage?.persist?.().catch(() => {});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+for (const p of Object.values(panes)) loadSlot(p, recall('slot-' + p.side)).catch(console.error);
+</script>
+</body>
+</html>
