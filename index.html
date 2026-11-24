@@ -117,7 +117,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 11</div>
+  <div style="color:#777;font-size:12px;text-align:center">版 12</div>
 </div>
 
 <form id="edit" hidden>
@@ -251,11 +251,9 @@ for (const el of document.querySelectorAll('.pane')) {
 
   p.v.onloadedmetadata = () => {
     p.seek.max = p.v.duration;
-    // 最初の絵を出すために、位置は動かさず、一瞬だけ再生して止める
-    const at = p.startAt;
+    const at = Math.max(p.startAt, MIN_T);
     p.startAt = 0;
-    const settle = () => { p.v.pause(); if (at > MIN_T) p.v.currentTime = at; };
-    p.v.play().then(settle, settle);
+    prime(p, at);
     refreshLayout();
   };
   p.v.onplay = p.v.onpause = refreshButtons;
@@ -266,30 +264,37 @@ const togglePlay = p => (p.v.paused ? play(p) : p.v.pause());
 const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
 // 動画のいちばん最後ぴったりに合わせるとiPhoneでは真っ暗になるので、少し手前までにする
 const lastFrame = p => Math.max((p.v.duration || 0) - 0.05, 0);
-// 指でなぞっている間、動画を指の位置（p.scrub.target）へ追いつかせる。毎コマ呼ばれる。
-// iPhoneは止まった動画の位置を何度も動かすと真っ暗になるので、
-// 進む方向は「遅い速さで実際に再生して」追いつかせる。戻る方向だけ位置を動かし、終わるまで待つ。
+// 読み込んだ動画を、止めたまま位置を動かせる状態にする。
+// iPhoneは、実際に絵が何コマか出るまで再生しないと、止めたあとの画面が真っ暗になる
+// （再生してすぐ止めただけでは真っ暗のままだった）。なので絵が3コマ出るのを待ってから止め、
+// そのあとで見せたい位置へ動かす。
+function prime(p, at) {
+  const v = p.v, url = p.url;
+  let done = false;
+  const finish = () => {
+    if (done || p.url !== url) return;
+    done = true;
+    v.pause();
+    v.currentTime = at;
+  };
+  v.play().then(() => {
+    if (v.requestVideoFrameCallback) {
+      let frames = 0;
+      const onFrame = () => { if (++frames >= 3) finish(); else if (!done) v.requestVideoFrameCallback(onFrame); };
+      v.requestVideoFrameCallback(onFrame);
+      setTimeout(finish, 1500);
+    } else setTimeout(finish, 400);
+  }, finish);
+}
+
+// 指でなぞっている間、動画の位置を指の位置（p.scrub.target）へ動かす。毎コマ呼ばれる。
+// 前の移動が終わってから次を送る。
 function chase(p) {
-  if (p.busy) return;
-  const diff = p.scrub.target - p.v.currentTime;
-  // 【実機での比較用】A は「位置を動かす」方式、B は「遅く再生して追いつく」方式。うまく動く方に統一する。
-  if (p.side === 'A' ? Math.abs(diff) > 0.02 : diff < -0.1) {
-    if (!p.v.paused) p.v.pause();
-    p.busy = true;
-    p.v.currentTime = p.scrub.target;
-    p.seekTimer = setTimeout(() => seekDone(p), 1000); // 「終わった」の合図が来ないときの保険
-    return;
-  }
-  if (p.side === 'A') return;
-  // 再生と停止を細かく繰り返さないよう、少し離れてから再生を始め、追いついたら止める
-  const rate = diff > 0.6 ? 2 : diff > 0.3 ? 1 : diff > 0.12 ? 0.5 : 0.25;
-  if (p.v.paused) {
-    if (diff > 0.08) { p.v.playbackRate = rate; p.v.play().catch(() => {}); }
-  } else if (diff <= 0) {
-    p.v.pause();
-  } else if (p.v.playbackRate !== rate) {
-    p.v.playbackRate = rate;
-  }
+  if (p.busy || Math.abs(p.scrub.target - p.v.currentTime) <= 0.02) return;
+  if (!p.v.paused) p.v.pause();
+  p.busy = true;
+  p.v.currentTime = p.scrub.target;
+  p.seekTimer = setTimeout(() => seekDone(p), 1000); // 「終わった」の合図が来ないときの保険
 }
 function seekDone(p) {
   clearTimeout(p.seekTimer);
@@ -420,7 +425,7 @@ function refreshButtons() {
     if (p.scrub) chase(p);
     const v = p.v, buf = [];
     for (let i = 0; i < v.buffered.length; i++) buf.push(`${v.buffered.start(i).toFixed(1)}-${v.buffered.end(i).toFixed(1)}`);
-    p.dbg.textContent = `v11 rs${v.readyState} ns${v.networkState} ${v.paused ? 'pause' : 'PLAY'}${v.seeking ? ' SEEKING' : ''} err${v.error ? v.error.code : '-'}`
+    p.dbg.textContent = `v12 rs${v.readyState} ns${v.networkState} ${v.paused ? 'pause' : 'PLAY'}${v.seeking ? ' SEEKING' : ''} err${v.error ? v.error.code : '-'}`
       + `
 t${v.currentTime.toFixed(2)}/${(v.duration || 0).toFixed(1)} x${v.playbackRate} ${v.videoWidth}x${v.videoHeight} ${p.info || ''}`
       + `
