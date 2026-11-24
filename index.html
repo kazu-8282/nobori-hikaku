@@ -117,7 +117,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 16</div>
+  <div style="color:#777;font-size:12px;text-align:center">版 17　<a href="test.html" style="color:#6cf">調査ページを開く</a></div>
 </div>
 
 <form id="edit" hidden>
@@ -237,8 +237,6 @@ for (const el of document.querySelectorAll('.pane')) {
   p.note = name => { p.log.push(name); if (p.log.length > 14) p.log.shift(); };
   for (const name of ['loadedmetadata', 'waiting', 'stalled', 'emptied', 'abort', 'error', 'seeking', 'seeked', 'play', 'pause', 'ended'])
     p.v.addEventListener(name, () => p.note(name));
-  p.frames = 0; // 実際に画面へ出た絵の枚数
-  if (p.v.requestVideoFrameCallback) (function count() { p.v.requestVideoFrameCallback(() => { p.frames++; count(); }); })();
 
   p.playBtn.onclick = () => togglePlay(p);
   gestures(p);
@@ -426,7 +424,7 @@ function refreshButtons() {
 (function tick() {
   for (const p of loaded()) {
     if (p.scrub) chase(p);
-    p.dbg.textContent = `v16 rs${p.v.readyState} ${p.v.paused ? 'pause' : 'PLAY'}${p.v.seeking ? ' SEEKING' : ''} err${p.v.error ? p.v.error.code : '-'} t${p.v.currentTime.toFixed(2)} fr${p.frames}
+    p.dbg.textContent = `v17 rs${p.v.readyState} ${p.v.paused ? 'pause' : 'PLAY'}${p.v.seeking ? ' SEEKING' : ''} err${p.v.error ? p.v.error.code : '-'} t${p.v.currentTime.toFixed(2)}
 ${p.log.join(' ')}`;
     if (!p.dragging) p.seek.value = p.v.currentTime;
     p.time.textContent = clock(p.v.currentTime);

@@ -130,6 +130,11 @@ async function run() {
   { let ok = 0; const t0 = performance.now(); for (let i = 0; i < 20; i++) if (await seek(v, 2 + i * 0.05) === 'ok') ok++; t.extra = `${ok}/20回 ${Math.round(performance.now() - t0)}ms`; }
   await wait(500);
 
+  t = tile(13, '絵の枚数を数え続けながら4');
+  v = video(t, blob);
+  if (v.requestVideoFrameCallback) { let n = 0; const vv = v, tt = t; (function count() { vv.requestVideoFrameCallback(() => { n++; tt.count = n; count(); }); })(); }
+  await once(v, 'loadedmetadata'); await playFor(v, 500); await seek(v, 2); await wait(800); t.extra = `数えた枚数${t.count || 0}`;
+
   msg.textContent = `終わりました。この画面のスクリーンショットを送ってください。（動画 ${(blob.size / 1048576).toFixed(0)}MB ${blob.type}）`;
 }
 document.getElementById('again').onclick = run;
