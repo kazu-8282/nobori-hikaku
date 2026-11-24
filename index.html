@@ -116,7 +116,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 6</div>
+  <div style="color:#777;font-size:12px;text-align:center">版 7</div>
 </div>
 
 <form id="edit" hidden>
@@ -240,8 +240,12 @@ for (const el of document.querySelectorAll('.pane')) {
 
   p.v.onloadedmetadata = () => {
     p.seek.max = p.v.duration;
-    p.v.currentTime = p.startAt || 0.001; // 0.001はiPhoneで最初の1コマを表示させるため
+    // iPhoneは一度も再生していない動画の位置を動かすと画面が真っ暗になることがあるので、
+    // 一瞬だけ再生して止めてから、最初の位置に合わせる（0.001は最初の1コマを表示させるため）
+    const at = p.startAt || 0.001;
     p.startAt = 0;
+    const settle = () => { p.v.pause(); p.v.currentTime = at; };
+    p.v.play().then(settle, settle);
     refreshLayout();
   };
   p.v.onplay = p.v.onpause = refreshButtons;
@@ -250,6 +254,8 @@ for (const el of document.querySelectorAll('.pane')) {
 
 const togglePlay = p => (p.v.paused ? play(p) : p.v.pause());
 const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
+// 動画のいちばん最後ぴったりに合わせるとiPhoneでは真っ暗になるので、少し手前までにする
+const lastFrame = p => Math.max((p.v.duration || 0) - 0.05, 0);
 // 指でなぞる間の位置移動。前の移動が終わってから次を送る。
 // iPhoneは「移動が終わった」の合図が来ないことがあるので、0.25秒待っても来なければ次へ進む。
 function seekTo(p, t) {
@@ -309,7 +315,7 @@ function gestures(p) {
       const dx = e.clientX - g.x0;
       if (!p.id || (!g.moved && Math.abs(dx) < 8)) return;
       if (!g.moved) { g.moved = true; p.v.pause(); }
-      seekTo(p, clamp(g.t0 + dx * SCRUB, 0, p.v.duration || 0));
+      seekTo(p, clamp(g.t0 + dx * SCRUB, 0, lastFrame(p)));
     } else if (pts.size >= 2) {
       const now = pinchNow();
       const s = clamp(g.s0 * now.d / g.d, 1, MAX_ZOOM);
@@ -340,7 +346,7 @@ function play(p) {
 function step(p, dir) {
   if (!p.id) return;
   p.v.pause();
-  p.v.currentTime = Math.min(Math.max(p.v.currentTime + dir * FRAME, 0), p.v.duration || 0);
+  p.v.currentTime = clamp(p.v.currentTime + dir * FRAME, 0, lastFrame(p));
 }
 function setRate(p, r) {
   p.rate = r;
