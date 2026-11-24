@@ -116,7 +116,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 7</div>
+  <div style="color:#777;font-size:12px;text-align:center">版 8</div>
 </div>
 
 <form id="edit" hidden>
@@ -240,12 +240,8 @@ for (const el of document.querySelectorAll('.pane')) {
 
   p.v.onloadedmetadata = () => {
     p.seek.max = p.v.duration;
-    // iPhoneは一度も再生していない動画の位置を動かすと画面が真っ暗になることがあるので、
-    // 一瞬だけ再生して止めてから、最初の位置に合わせる（0.001は最初の1コマを表示させるため）
-    const at = p.startAt || 0.001;
+    p.v.currentTime = p.startAt || 0.001; // 0.001はiPhoneで最初の1コマを表示させるため
     p.startAt = 0;
-    const settle = () => { p.v.pause(); p.v.currentTime = at; };
-    p.v.play().then(settle, settle);
     refreshLayout();
   };
   p.v.onplay = p.v.onpause = refreshButtons;
@@ -256,27 +252,31 @@ const togglePlay = p => (p.v.paused ? play(p) : p.v.pause());
 const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
 // 動画のいちばん最後ぴったりに合わせるとiPhoneでは真っ暗になるので、少し手前までにする
 const lastFrame = p => Math.max((p.v.duration || 0) - 0.05, 0);
-// 指でなぞる間の位置移動。前の移動が終わってから次を送る。
-// iPhoneは「移動が終わった」の合図が来ないことがあるので、0.25秒待っても来なければ次へ進む。
-function seekTo(p, t) {
-  p.want = t;
-  if (!p.busy) seekFlush(p);
-}
-function seekFlush(p) {
-  p.busy = true;
-  p.v.currentTime = p.want;
-  p.want = null;
-  clearTimeout(p.seekTimer);
-  p.seekTimer = setTimeout(() => seekDone(p), 250);
+// 指でなぞっている間、動画を指の位置（p.scrub.target）へ追いつかせる。毎コマ呼ばれる。
+// iPhoneは止まった動画の位置を何度も動かすと真っ暗になるので、
+// 進む方向は「遅い速さで実際に再生して」追いつかせる。戻る方向だけ位置を動かし、終わるまで待つ。
+function chase(p) {
+  const diff = p.scrub.target - p.v.currentTime;
+  if (diff > 0.03 && !p.busy) {
+    const rate = Math.round(clamp(diff * 5, 0.1, 2) * 20) / 20;
+    if (p.v.playbackRate !== rate) p.v.playbackRate = rate;
+    if (p.v.paused) p.v.play().catch(() => {});
+    return;
+  }
+  if (!p.v.paused) p.v.pause();
+  if (diff < -0.1 && !p.busy) {
+    p.busy = true;
+    p.v.currentTime = p.scrub.target;
+    p.seekTimer = setTimeout(() => seekDone(p), 2000); // 「終わった」の合図が来ないときの保険
+  }
 }
 function seekDone(p) {
   clearTimeout(p.seekTimer);
   p.busy = false;
-  if (p.want != null) seekFlush(p);
 }
 
 // 動画の上での指の操作
-//  1本指で左右になぞる：その分だけ動画を進める・戻す（指の速さでスロー再生）
+//  1本指で左右になぞる：その分だけ動画を進める・戻す（指の速さでスロー再生）→ chase()
 //  2本指でつまむ・広げる：その画面だけ拡大。2本指のまま動かすと見る場所を移せる
 //  タップ：再生・停止　／　2回タップ：拡大を元に戻す
 const SCRUB = 0.01; // 指1ピクセルで進む秒数
@@ -314,8 +314,8 @@ function gestures(p) {
     if (g.one) {
       const dx = e.clientX - g.x0;
       if (!p.id || (!g.moved && Math.abs(dx) < 8)) return;
-      if (!g.moved) { g.moved = true; p.v.pause(); }
-      seekTo(p, clamp(g.t0 + dx * SCRUB, 0, lastFrame(p)));
+      if (!g.moved) { g.moved = true; p.v.pause(); p.scrub = { target: g.t0 }; }
+      p.scrub.target = clamp(g.t0 + dx * SCRUB, 0, lastFrame(p));
     } else if (pts.size >= 2) {
       const now = pinchNow();
       const s = clamp(g.s0 * now.d / g.d, 1, MAX_ZOOM);
@@ -332,6 +332,7 @@ function gestures(p) {
       lastTap = now;
       togglePlay(p);
     }
+    if (p.scrub) { p.scrub = null; p.v.pause(); p.v.playbackRate = p.rate; }
     g = null; // 指が残っていても、全部離すまでは何もしない
   };
 }
@@ -394,6 +395,7 @@ function refreshButtons() {
 }
 (function tick() {
   for (const p of loaded()) {
+    if (p.scrub) chase(p);
     if (!p.dragging) p.seek.value = p.v.currentTime;
     p.time.textContent = clock(p.v.currentTime);
   }
