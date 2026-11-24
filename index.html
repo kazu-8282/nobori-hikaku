@@ -117,7 +117,7 @@ body.tall .row button{flex:1 0 30%}
   <header><b>セット（A と B の組み合わせ）</b><button id="setsClose">閉じる</button></header>
   <button id="setSave">＋ いまの A と B を名前を付けて保存</button>
   <ul id="setList"></ul>
-  <div style="color:#777;font-size:12px;text-align:center">版 9</div>
+  <div style="color:#777;font-size:12px;text-align:center">版 10</div>
 </div>
 
 <form id="edit" hidden>
@@ -159,6 +159,9 @@ body.tall .row button{flex:1 0 30%}
 'use strict';
 const $ = (s, el = document) => el.querySelector(s);
 const FRAME = 1 / 30; // コマ送りの1コマ（秒）
+// 位置を動かすときの下限（秒）。iPhoneでは、0秒ちょうどや0.001秒へ動かすと
+// 移動が終わらないまま固まり、画面が真っ暗になった（実機の状態表示で確認）。
+const MIN_T = 0.05;
 
 // ---------- 保存（IndexedDB：meta=一覧用の情報、blobs=動画本体） ----------
 let dbPromise;
@@ -242,14 +245,17 @@ for (const el of document.querySelectorAll('.pane')) {
   $('.swap', el).onclick = $('.empty', el).onclick = () => openLib(p.side);
   for (const b of el.querySelectorAll('.rate')) b.onclick = () => setRate(p, +b.dataset.r);
 
-  p.seek.oninput = () => { p.v.currentTime = +p.seek.value; };
+  p.seek.oninput = () => { p.v.currentTime = clamp(+p.seek.value, MIN_T, lastFrame(p)); };
   p.seek.onpointerdown = () => { p.dragging = true; };
   p.seek.onpointerup = p.seek.onpointercancel = () => { p.dragging = false; };
 
   p.v.onloadedmetadata = () => {
     p.seek.max = p.v.duration;
-    p.v.currentTime = p.startAt || 0.001; // 0.001はiPhoneで最初の1コマを表示させるため
+    // 最初の絵を出すために、位置は動かさず、一瞬だけ再生して止める
+    const at = p.startAt;
     p.startAt = 0;
+    const settle = () => { p.v.pause(); if (at > MIN_T) p.v.currentTime = at; };
+    p.v.play().then(settle, settle);
     refreshLayout();
   };
   p.v.onplay = p.v.onpause = refreshButtons;
@@ -323,7 +329,7 @@ function gestures(p) {
       const dx = e.clientX - g.x0;
       if (!p.id || (!g.moved && Math.abs(dx) < 8)) return;
       if (!g.moved) { g.moved = true; p.v.pause(); p.scrub = { target: g.t0 }; }
-      p.scrub.target = clamp(g.t0 + dx * SCRUB, 0, lastFrame(p));
+      p.scrub.target = clamp(g.t0 + dx * SCRUB, MIN_T, lastFrame(p));
     } else if (pts.size >= 2) {
       const now = pinchNow();
       const s = clamp(g.s0 * now.d / g.d, 1, MAX_ZOOM);
@@ -348,14 +354,14 @@ addEventListener('resize', () => Object.values(panes).forEach(p => p.applyZoom()
 
 function play(p) {
   if (!p.id) return;
-  if (p.v.duration - p.v.currentTime < 0.05) p.v.currentTime = 0;
+  if (p.v.duration - p.v.currentTime < 0.1) p.v.currentTime = MIN_T;
   p.v.playbackRate = p.rate;
   p.v.play().catch(() => {});
 }
 function step(p, dir) {
   if (!p.id) return;
   p.v.pause();
-  p.v.currentTime = clamp(p.v.currentTime + dir * FRAME, 0, lastFrame(p));
+  p.v.currentTime = clamp(p.v.currentTime + dir * FRAME, MIN_T, lastFrame(p));
 }
 function setRate(p, r) {
   p.rate = r;
@@ -407,7 +413,7 @@ function refreshButtons() {
     if (p.scrub) chase(p);
     const v = p.v, buf = [];
     for (let i = 0; i < v.buffered.length; i++) buf.push(`${v.buffered.start(i).toFixed(1)}-${v.buffered.end(i).toFixed(1)}`);
-    p.dbg.textContent = `v9 rs${v.readyState} ns${v.networkState} ${v.paused ? 'pause' : 'PLAY'}${v.seeking ? ' SEEKING' : ''} err${v.error ? v.error.code : '-'}`
+    p.dbg.textContent = `v10 rs${v.readyState} ns${v.networkState} ${v.paused ? 'pause' : 'PLAY'}${v.seeking ? ' SEEKING' : ''} err${v.error ? v.error.code : '-'}`
       + `
 t${v.currentTime.toFixed(2)}/${(v.duration || 0).toFixed(1)} x${v.playbackRate} ${v.videoWidth}x${v.videoHeight} ${p.info || ''}`
       + `
