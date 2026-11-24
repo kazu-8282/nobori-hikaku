@@ -10,7 +10,7 @@ self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-store' }) // 古い版が残らないよう、毎回最新を取りにいく
       .then(r => {
         if (r.ok) {
           const copy = r.clone();
